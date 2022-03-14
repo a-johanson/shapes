@@ -6,6 +6,45 @@ function rand(min, max) {
     return (max - min) * prng() + min;
 }
 
+class GrowthSite {
+    constructor(x, y, z, dir_s, dir_t, growth_speed, ttl, generation) {
+        this.position = vec3.fromValues(x, y, z);
+        this.dir_s = dir_s;
+        this.dir_t = dir_t;
+        // this.initial_direction = direction;
+        this.growth_speed = growth_speed;
+        this.ttl = ttl;
+        this.generation = generation;
+        // this.color = color;
+    }
+
+    clone_position() {
+        return vec3.clone(this.position);
+    }
+
+    step() {
+        if (this.ttl <= 0) {
+            return;
+        }
+
+        const max_angle_incr = Math.PI / 32.0;
+        this.dir_s += rand(-max_angle_incr, max_angle_incr);
+        this.dir_t += rand(-max_angle_incr, max_angle_incr);
+
+        const dir = sphericalToCartesian(this.dir_s, this.dir_t);
+        vec3.scaleAndAdd(this.position, this.position, dir, this.growth_speed);
+        this.ttl -= 1;
+    }
+}
+
+function sphericalToCartesian(s, t) {
+    return vec3.fromValues(
+        Math.sin(t),
+        Math.cos(s) * Math.cos(t),
+        Math.sin(s) * Math.cos(t)
+    );
+}
+
 const canvasDim = [600, 800];
 
 let alpha = -60.0;
@@ -62,9 +101,18 @@ function drawLineStrip(points) {
     endShape();
 }
 
+let twig = [];
+
 function setup() {
     createCanvas(canvasDim[0], canvasDim[1]);
     strokeWeight(1);
+
+    let gs = new GrowthSite(0, 0, 0, 0, 0, 0.01, 150, 0);
+    twig.push(gs.clone_position());
+    while (gs.ttl > 0) {
+        gs.step();
+        twig.push(gs.clone_position());
+    }
 }
 
 const square = [
@@ -72,11 +120,6 @@ const square = [
     vec3.fromValues(1, 0, -1),
     vec3.fromValues(1, 0, 1),
     vec3.fromValues(-1, 0, 1)
-];
-const twig = [
-    vec3.fromValues(0, 0.5, 0),
-    vec3.fromValues(-0.1, 1, 0.1),
-    vec3.fromValues(0.1, 1.5, -0.1)
 ];
 
 function draw() {
