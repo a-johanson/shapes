@@ -6,12 +6,56 @@ function rand(min, max) {
     return (max - min) * prng() + min;
 }
 
+class Twig {
+    constructor(x, y, z, dir_s, dir_t, growth_speed, ttl) {
+        this.branches = [];
+        this.growth_sites = [new GrowthSite(x, y, z, dir_s, dir_t, growth_speed, ttl, 0)];
+    }
+
+    grow() {
+        while(this.growth_sites.length > 0) {
+            this.grow_branch(this.growth_sites.pop());
+        }
+    }
+
+    grow_branch(gs) {
+        const branching_angle = Math.PI / 6.0;
+
+        let branch = [gs.clone_position()];
+        while (gs.ttl > 0) {
+            gs.step();
+            branch.push(gs.clone_position());
+
+            const dir = sphericalToCartesian(gs.dir_s, gs.dir_t);
+            const angle = Math.acos(vec3.dot(dir, gs.initial_direction));
+            if (angle >= branching_angle) {
+                this.growth_sites.push(new GrowthSite(
+                    gs.position[0],
+                    gs.position[1],
+                    gs.position[2],
+                    2.0 * gs.initial_dir_s - gs.dir_s,
+                    2.0 * gs.initial_dir_t - gs.dir_t,
+                    gs.growth_speed,
+                    0.75 * gs.ttl,
+                    gs.generation + 1
+                ));
+                gs.initial_dir_s = gs.dir_s;
+                gs.initial_dir_t = gs.dir_t;
+                gs.initial_direction = dir;
+            }
+        }
+        this.branches.push(branch);
+    }
+}
+
 class GrowthSite {
     constructor(x, y, z, dir_s, dir_t, growth_speed, ttl, generation) {
         this.position = vec3.fromValues(x, y, z);
         this.dir_s = dir_s;
         this.dir_t = dir_t;
-        // this.initial_direction = direction;
+        this.initial_dir_s = dir_s;
+        this.initial_dir_t = dir_t;
+        this.initial_direction = sphericalToCartesian(dir_s, dir_t);
         this.growth_speed = growth_speed;
         this.ttl = ttl;
         this.generation = generation;
@@ -101,18 +145,13 @@ function drawLineStrip(points) {
     endShape();
 }
 
-let twig = [];
+let twig = new Twig(0, 0, 0, 0, 0, 0.01, 150);
 
 function setup() {
     createCanvas(canvasDim[0], canvasDim[1]);
     strokeWeight(1);
 
-    let gs = new GrowthSite(0, 0, 0, 0, 0, 0.01, 150, 0);
-    twig.push(gs.clone_position());
-    while (gs.ttl > 0) {
-        gs.step();
-        twig.push(gs.clone_position());
-    }
+    twig.grow();
 }
 
 const square = [
@@ -151,16 +190,24 @@ function draw() {
     );
 
     p_light = screenProjection(projection, view, model, [light]);
-    p_twig = screenProjection(projection, view, model, twig);
+    const p_branches = twig.branches.map(function(b) {
+        return screenProjection(projection, view, model, b);
+    });
     mat4.mul(model, model, shadowProjection);
-    p_shadow = screenProjection(projection, view, model, twig);
+    const p_shadows = twig.branches.map(function(b) {
+        return screenProjection(projection, view, model, b);
+    });
 
     strokeWeight(3);
     noFill();
     stroke(120);
-    drawLineStrip(p_shadow);
+    p_shadows.forEach(function(p) {
+        drawLineStrip(p);
+    });
     stroke(0);
-    drawLineStrip(p_twig);
+    p_branches.forEach(function(p) {
+        drawLineStrip(p);
+    });
 
     strokeWeight(10);
     stroke(255, 0, 0);
